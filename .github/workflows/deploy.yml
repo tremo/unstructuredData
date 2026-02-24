@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - claude/unstructured-data-management-SBMvG
   workflow_dispatch:
 
 permissions:
