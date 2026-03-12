@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   FileSearch, AlertTriangle, ShieldCheck, Lock, Clock,
-  TrendingUp, FolderOpen, Mail, ArrowRight
+  TrendingUp, FolderOpen, Mail, ArrowRight, Play, Pause, Square, Loader
 } from 'lucide-react'
-import { filesApi, auditApi, policiesApi, scanLocationsApi } from '../services/api'
+import { filesApi, auditApi, policiesApi, scanLocationsApi, scanApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 import ClassificationBadge from '../components/common/ClassificationBadge'
 
@@ -14,6 +14,28 @@ export default function Dashboard() {
   const [policies, setPolicies] = useState([])
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [scanStatus, setScanStatus] = useState({ running: false, paused: false, progress: {} })
+  const eventSourceRef = useRef(null)
+
+  const connectSSE = useCallback(() => {
+    if (eventSourceRef.current) eventSourceRef.current.close()
+    const es = new EventSource(scanApi.progressUrl)
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.event === 'status' || msg.event === 'progress') {
+          setScanStatus(msg.data)
+        } else if (msg.event === 'completed' || msg.event === 'cancelled' || msg.event === 'error') {
+          setScanStatus({ running: false, paused: false, progress: msg.data })
+          // Tarama bitince verileri yenile
+          Promise.all([filesApi.getStats(), filesApi.getAll(), auditApi.getAll()])
+            .then(([s, f, l]) => { setStats(s); setFiles(f); setLogs(l) })
+        }
+      } catch { /* ignore */ }
+    }
+    es.onerror = () => { es.close(); eventSourceRef.current = null }
+    eventSourceRef.current = es
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -22,15 +44,40 @@ export default function Dashboard() {
       auditApi.getAll(),
       policiesApi.getAll(),
       scanLocationsApi.getAll(),
-    ]).then(([statsData, filesData, logsData, policiesData, locationsData]) => {
+      scanApi.status(),
+    ]).then(([statsData, filesData, logsData, policiesData, locationsData, scanData]) => {
       setStats(statsData)
       setFiles(filesData)
       setLogs(logsData)
       setPolicies(policiesData)
       setLocations(locationsData)
+      setScanStatus(scanData)
+      if (scanData.running) connectSSE()
     }).catch(err => console.error('Dashboard yükleme hatası:', err))
       .finally(() => setLoading(false))
-  }, [])
+    return () => { if (eventSourceRef.current) eventSourceRef.current.close() }
+  }, [connectSSE])
+
+  const handleStartScan = async () => {
+    try {
+      await scanApi.start()
+      connectSSE()
+    } catch (err) {
+      console.error('Tarama başlatma hatası:', err)
+    }
+  }
+
+  const handlePauseScan = async () => {
+    try { await scanApi.pause() } catch (err) { console.error(err) }
+  }
+
+  const handleResumeScan = async () => {
+    try { await scanApi.resume() } catch (err) { console.error(err) }
+  }
+
+  const handleCancelScan = async () => {
+    try { await scanApi.cancel() } catch (err) { console.error(err) }
+  }
 
   if (loading) {
     return (
@@ -95,6 +142,69 @@ export default function Dashboard() {
             <p>Aktif Tarama Noktası</p>
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-header">
+          <span className="card-title">Tarama Kontrolü</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {!scanStatus.running ? (
+              <button className="btn btn-primary btn-sm" onClick={handleStartScan}>
+                <Play size={13} /> Taramayı Başlat
+              </button>
+            ) : (
+              <>
+                {scanStatus.paused ? (
+                  <button className="btn btn-primary btn-sm" onClick={handleResumeScan}>
+                    <Play size={13} /> Devam Et
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary btn-sm" onClick={handlePauseScan}>
+                    <Pause size={13} /> Durakla
+                  </button>
+                )}
+                <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }} onClick={handleCancelScan}>
+                  <Square size={13} /> İptal
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        {scanStatus.running && scanStatus.progress && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: 8 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {scanStatus.paused ? <Pause size={14} color="#f59e0b" /> : <Loader size={14} className="spin" />}
+                {scanStatus.paused ? 'Duraklatıldı' : 'Taranıyor...'}
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {scanStatus.progress.scannedFiles || 0} / {scanStatus.progress.totalFiles || 0} dosya
+              </span>
+            </div>
+            <div style={{ background: 'var(--bg-primary)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 4, transition: 'width 0.3s',
+                background: scanStatus.paused ? '#f59e0b' : 'var(--accent-blue)',
+                width: `${scanStatus.progress.totalFiles ? Math.round((scanStatus.progress.scannedFiles / scanStatus.progress.totalFiles) * 100) : 0}%`,
+              }} />
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              <span>Tespit: {scanStatus.progress.detectedFiles || 0}</span>
+              <span>Atlanan: {scanStatus.progress.skippedFiles || 0}</span>
+              <span>Hata: {scanStatus.progress.errors?.length || 0}</span>
+            </div>
+            {scanStatus.progress.currentFile && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {scanStatus.progress.currentFile}
+              </div>
+            )}
+          </div>
+        )}
+        {!scanStatus.running && scanStatus.progress?.scannedFiles > 0 && (
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            Son tarama: {scanStatus.progress.scannedFiles} dosya tarandı, {scanStatus.progress.detectedFiles} bulgu tespit edildi
+          </div>
+        )}
       </div>
 
       <div className="grid-2" style={{ marginBottom: 20 }}>

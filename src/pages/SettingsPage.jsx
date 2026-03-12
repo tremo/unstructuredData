@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Plus, Trash2, Save, FolderOpen, Mail, Clock, Shield, Server, Bell } from 'lucide-react'
+import { Settings, Plus, Trash2, Save, FolderOpen, Mail, Clock, Shield, Server, Bell, Gauge } from 'lucide-react'
 import { scanLocationsApi, settingsApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 
@@ -26,6 +26,12 @@ export default function SettingsPage() {
     digestFrequency: 'daily', escalateAfterDays: 7, ccManager: true, ccDPO: true,
   })
 
+  const [perfSettings, setPerfSettings] = useState({
+    concurrentScans: 2, throttleDelay: 100, batchSize: 50,
+    batchPauseMs: 2000, maxFileSize: 100, pauseOnHighLoad: true,
+    cpuThreshold: 80, scanPriority: 'normal',
+  })
+
   useEffect(() => {
     Promise.all([
       scanLocationsApi.getAll(),
@@ -35,6 +41,7 @@ export default function SettingsPage() {
       if (settings.email) setEmailSettings(settings.email)
       if (settings.schedule) setScheduleSettings(settings.schedule)
       if (settings.notifications) setNotifSettings(settings.notifications)
+      if (settings.performance) setPerfSettings(prev => ({ ...prev, ...settings.performance }))
     }).catch(console.error).finally(() => setLoading(false))
   }, [])
 
@@ -85,6 +92,7 @@ export default function SettingsPage() {
     { id: 'email', label: 'E-posta', icon: Mail },
     { id: 'schedule', label: 'Zamanlama', icon: Clock },
     { id: 'notifications', label: 'Bildirimler', icon: Bell },
+    { id: 'performance', label: 'Performans', icon: Gauge },
   ]
 
   if (loading) {
@@ -275,6 +283,70 @@ export default function SettingsPage() {
           </div>
           <div style={{ marginTop: 20 }}>
             <button className="btn btn-primary" disabled={saving} onClick={() => saveSettings('notifications', notifSettings)}>
+              <Save size={15} /> {saving ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'performance' && (
+        <div className="card">
+          <div className="card-header"><span className="card-title">Tarama Performans Ayarları</span></div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Sunucu kaynaklarını korumak için tarama hızını ve yük kontrollerini ayarlayın.
+          </p>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Tarama Önceliği</label>
+              <select className="form-select" value={perfSettings.scanPriority} onChange={e => setPerfSettings({...perfSettings, scanPriority: e.target.value})}>
+                <option value="low">Düşük (sunucu yükünü minimumda tutar)</option>
+                <option value="normal">Normal</option>
+                <option value="high">Yüksek (daha hızlı tarama)</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Paralel Tarama Sayısı</label>
+              <input className="form-input" type="number" min="1" max="16" value={perfSettings.concurrentScans} onChange={e => setPerfSettings({...perfSettings, concurrentScans: parseInt(e.target.value) || 1})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Aynı anda işlenecek dosya sayısı (1-16)</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Dosyalar Arası Bekleme (ms)</label>
+              <input className="form-input" type="number" min="0" max="5000" step="50" value={perfSettings.throttleDelay} onChange={e => setPerfSettings({...perfSettings, throttleDelay: parseInt(e.target.value) || 0})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Her dosya işlendikten sonra beklenecek süre</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Batch Boyutu (dosya)</label>
+              <input className="form-input" type="number" min="10" max="500" step="10" value={perfSettings.batchSize} onChange={e => setPerfSettings({...perfSettings, batchSize: parseInt(e.target.value) || 50})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Bu kadar dosyadan sonra kısa mola verilir</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Batch Mola Süresi (ms)</label>
+              <input className="form-input" type="number" min="500" max="30000" step="500" value={perfSettings.batchPauseMs} onChange={e => setPerfSettings({...perfSettings, batchPauseMs: parseInt(e.target.value) || 2000})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Batch tamamlandığında beklenecek süre</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Max. Dosya Boyutu (MB)</label>
+              <input className="form-input" type="number" min="1" max="1000" value={perfSettings.maxFileSize} onChange={e => setPerfSettings({...perfSettings, maxFileSize: parseInt(e.target.value) || 100})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Bu boyutun üzerindeki dosyalar atlanır</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">CPU Yük Eşiği (%)</label>
+              <input className="form-input" type="number" min="50" max="100" value={perfSettings.cpuThreshold} onChange={e => setPerfSettings({...perfSettings, cpuThreshold: parseInt(e.target.value) || 80})} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>CPU bu eşiği aşarsa tarama yavaşlatılır</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+            <label className="toggle-switch">
+              <input type="checkbox" checked={perfSettings.pauseOnHighLoad} onChange={e => setPerfSettings({...perfSettings, pauseOnHighLoad: e.target.checked})} />
+              <span className="toggle-slider" />
+            </label>
+            <span style={{ fontSize: '0.85rem' }}>Yüksek CPU Yükünde Otomatik Duraklat</span>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <button className="btn btn-primary" disabled={saving} onClick={() => saveSettings('performance', perfSettings)}>
               <Save size={15} /> {saving ? 'Kaydediliyor...' : 'Kaydet'}
             </button>
           </div>

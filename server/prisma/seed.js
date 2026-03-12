@@ -201,6 +201,7 @@ async function main() {
       { key: 'email', value: JSON.stringify({ smtpServer: 'smtp.kurum.com.tr', smtpPort: '587', fromAddress: 'veri-koruma@kurum.com.tr', fromName: 'Veri Koruma Sistemi', useTLS: true }) },
       { key: 'schedule', value: JSON.stringify({ scanFrequency: 'daily', scanTime: '02:00', retentionDays: 90, maxFileSize: 100, concurrentScans: 4 }) },
       { key: 'notifications', value: JSON.stringify({ enableEmail: true, enableSlack: false, enableTeams: true, digestFrequency: 'daily', escalateAfterDays: 7, ccManager: true, ccDPO: true }) },
+      { key: 'performance', value: JSON.stringify({ concurrentScans: 2, throttleDelay: 100, batchSize: 50, batchPauseMs: 2000, maxFileSize: 100, pauseOnHighLoad: true, cpuThreshold: 80, scanPriority: 'normal' }) },
     ],
   })
 

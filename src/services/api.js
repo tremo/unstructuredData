@@ -83,3 +83,13 @@ export const settingsApi = {
   get: (key) => request(`/settings/${key}`),
   set: (key, value) => request(`/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) }),
 }
+
+// Scan
+export const scanApi = {
+  start: (locationIds) => request('/scan/start', { method: 'POST', body: JSON.stringify({ locationIds }) }),
+  pause: () => request('/scan/pause', { method: 'POST' }),
+  resume: () => request('/scan/resume', { method: 'POST' }),
+  cancel: () => request('/scan/cancel', { method: 'POST' }),
+  status: () => request('/scan/status'),
+  progressUrl: `${API_BASE}/scan/progress`,
+}

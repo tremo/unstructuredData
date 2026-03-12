@@ -15,7 +15,11 @@ Kurumsal dosya sistemlerindeki hassas verileri (TCKN, IBAN, kredi kartı, sağl�
 │   └── styles/index.css    # Global dark theme stilleri
 ├── server/                 # Express 5 + Prisma ORM backend
 │   ├── index.js            # Sunucu giriş noktası (port 3001)
-│   ├── routes/             # 8 REST API route modülü
+│   ├── routes/             # 9 REST API route modülü (scan dahil)
+│   ├── services/           # İş mantığı servisleri
+│   │   ├── scanner.js      # Tarama motoru (throttle, batch, concurrency)
+│   │   ├── textExtractor.js # PDF/DOCX/XLSX metin çıkarma
+│   │   └── patternMatcher.js # Regex tabanlı hassas veri tespiti
 │   ├── prisma/
 │   │   ├── schema.prisma   # Veritabanı şeması (8 model)
 │   │   ├── seed.js         # Başlangıç verisi
@@ -77,6 +81,8 @@ npm run db:generate      # Prisma client oluştur
 | `/api/workflows` | Liste (?templates=true/false) | Yeni akış | `/:id` güncelle | `/:id` |
 | `/api/scan-locations` | Liste | Yeni konum | `/:id` durum güncelle | `/:id` |
 | `/api/settings` | Tüm ayarlar | - | `/:key` upsert | - |
+| `/api/scan` | `GET /status` durum | `POST /start,pause,resume,cancel` | - | - |
+| `/api/scan/progress` | SSE gerçek zamanlı ilerleme | - | - | - |
 | `/api/health` | Sağlık kontrolü | - | - | - |
 
 ## Veritabanı Modelleri

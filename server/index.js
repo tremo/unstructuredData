@@ -11,6 +11,7 @@ import auditRouter from './routes/audit.js'
 import workflowsRouter from './routes/workflows.js'
 import settingsRouter from './routes/settings.js'
 import scanLocationsRouter from './routes/scanLocations.js'
+import scanRouter from './routes/scan.js'
 
 const app = express()
 const prisma = new PrismaClient()
@@ -35,6 +36,7 @@ app.use('/api/audit', auditRouter)
 app.use('/api/workflows', workflowsRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/scan-locations', scanLocationsRouter)
+app.use('/api/scan', scanRouter)
 
 // Health check
 app.get('/api/health', (req, res) => {
