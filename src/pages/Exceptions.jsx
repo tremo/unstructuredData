@@ -1,38 +1,58 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ClipboardList, Plus, Check, X, Eye, Clock, AlertTriangle } from 'lucide-react'
-import { exceptions as defaultExceptions } from '../data/mockData'
+import { exceptionsApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 
 export default function Exceptions() {
-  const [exceptionList, setExceptions] = useState(defaultExceptions)
+  const [exceptionList, setExceptions] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [viewEx, setViewEx] = useState(null)
   const [form, setForm] = useState({ fileName: '', requestedBy: '', department: '', reason: '', expiresAt: '' })
 
-  const handleApprove = (id) => {
-    setExceptions(exceptionList.map(e => e.id === id ? { ...e, status: 'approved', approvedBy: 'Admin', expiresAt: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0] } : e))
+  useEffect(() => {
+    exceptionsApi.getAll().then(setExceptions).catch(console.error).finally(() => setLoading(false))
+  }, [])
+
+  const handleApprove = async (id) => {
+    try {
+      const updated = await exceptionsApi.update(id, {
+        status: 'approved',
+        approvedBy: 'Admin',
+        expiresAt: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0]
+      })
+      setExceptions(exceptionList.map(e => e.id === id ? updated : e))
+    } catch (err) {
+      console.error('Onay hatası:', err)
+    }
   }
 
-  const handleReject = (id) => {
-    setExceptions(exceptionList.filter(e => e.id !== id))
+  const handleReject = async (id) => {
+    try {
+      await exceptionsApi.delete(id)
+      setExceptions(exceptionList.filter(e => e.id !== id))
+    } catch (err) {
+      console.error('Red hatası:', err)
+    }
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!form.fileName || !form.reason) return
-    setExceptions([...exceptionList, {
-      id: Date.now(),
-      fileId: null,
-      fileName: form.fileName,
-      requestedBy: form.requestedBy || 'Kullanıcı',
-      department: form.department,
-      reason: form.reason,
-      status: 'pending',
-      approvedBy: null,
-      expiresAt: form.expiresAt || null,
-      createdAt: new Date().toISOString().split('T')[0]
-    }])
-    setShowModal(false)
-    setForm({ fileName: '', requestedBy: '', department: '', reason: '', expiresAt: '' })
+    try {
+      const created = await exceptionsApi.create({
+        fileId: 1, // placeholder
+        fileName: form.fileName,
+        requestedBy: form.requestedBy || 'Kullanıcı',
+        department: form.department,
+        reason: form.reason,
+        expiresAt: form.expiresAt || null,
+      })
+      setExceptions([created, ...exceptionList])
+      setShowModal(false)
+      setForm({ fileName: '', requestedBy: '', department: '', reason: '', expiresAt: '' })
+    } catch (err) {
+      console.error('İstisna oluşturma hatası:', err)
+    }
   }
 
   const pendingCount = exceptionList.filter(e => e.status === 'pending').length
@@ -81,7 +101,9 @@ export default function Exceptions() {
               </tr>
             </thead>
             <tbody>
-              {exceptionList.map(ex => (
+              {loading ? (
+                <tr><td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Yükleniyor...</td></tr>
+              ) : exceptionList.map(ex => (
                 <tr key={ex.id}>
                   <td style={{ fontWeight: 500 }}>{ex.fileName}</td>
                   <td>{ex.requestedBy}</td>
@@ -90,7 +112,7 @@ export default function Exceptions() {
                   <td><StatusBadge status={ex.status} /></td>
                   <td style={{ color: 'var(--text-secondary)' }}>{ex.approvedBy || '-'}</td>
                   <td style={{ color: 'var(--text-secondary)' }}>{ex.expiresAt || '-'}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{ex.createdAt}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{ex.createdAt?.split('T')[0]}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn-icon" title="Detay" onClick={() => setViewEx(ex)}><Eye size={14} /></button>
@@ -161,7 +183,7 @@ export default function Exceptions() {
               <div className="form-group" style={{ gridColumn: '1 / -1' }}><label className="form-label">Sebep</label><div style={{ color: 'var(--text-secondary)' }}>{viewEx.reason}</div></div>
               <div className="form-group"><label className="form-label">Onaylayan</label><div>{viewEx.approvedBy || 'Bekliyor'}</div></div>
               <div className="form-group"><label className="form-label">Bitiş Tarihi</label><div>{viewEx.expiresAt || 'Belirlenmedi'}</div></div>
-              <div className="form-group"><label className="form-label">Talep Tarihi</label><div>{viewEx.createdAt}</div></div>
+              <div className="form-group"><label className="form-label">Talep Tarihi</label><div>{viewEx.createdAt?.split('T')[0]}</div></div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setViewEx(null)}>Kapat</button>

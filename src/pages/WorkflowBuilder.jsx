@@ -19,6 +19,7 @@ import {
   UserSearch, AlertTriangle, FileX, Download, Upload, GripVertical
 } from 'lucide-react'
 import { nodeTypes as nodeTypeDefs } from '../data/mockData'
+import { workflowsApi } from '../services/api'
 
 const iconMap = {
   Zap, GitBranch, Mail, Clock, Cog, CheckCircle, MailWarning,
@@ -204,7 +205,12 @@ export default function WorkflowBuilder() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={exportWorkflow}><Download size={15} /> Dışa Aktar</button>
-            <button className="btn btn-primary"><Save size={15} /> Kaydet</button>
+            <button className="btn btn-primary" onClick={async () => {
+              try {
+                await workflowsApi.create({ name: workflowName, nodes, edges })
+                alert('İş akışı kaydedildi!')
+              } catch (err) { console.error('Kaydetme hatası:', err) }
+            }}><Save size={15} /> Kaydet</button>
           </div>
         </div>
       </div>

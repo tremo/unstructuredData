@@ -1,53 +1,83 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings, Plus, Trash2, Save, FolderOpen, Mail, Clock, Shield, Server, Bell } from 'lucide-react'
-import { scanLocations as defaultLocations } from '../data/mockData'
+import { scanLocationsApi, settingsApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('scan')
-  const [locations, setLocations] = useState(defaultLocations)
+  const [locations, setLocations] = useState([])
   const [showAddLocation, setShowAddLocation] = useState(false)
   const [newLoc, setNewLoc] = useState({ name: '', type: 'SMB' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   const [emailSettings, setEmailSettings] = useState({
-    smtpServer: 'smtp.kurum.com.tr',
-    smtpPort: '587',
-    fromAddress: 'veri-koruma@kurum.com.tr',
-    fromName: 'Veri Koruma Sistemi',
-    useTLS: true,
+    smtpServer: 'smtp.kurum.com.tr', smtpPort: '587',
+    fromAddress: 'veri-koruma@kurum.com.tr', fromName: 'Veri Koruma Sistemi', useTLS: true,
   })
 
   const [scheduleSettings, setScheduleSettings] = useState({
-    scanFrequency: 'daily',
-    scanTime: '02:00',
-    retentionDays: 90,
-    maxFileSize: 100,
-    concurrentScans: 4,
+    scanFrequency: 'daily', scanTime: '02:00',
+    retentionDays: 90, maxFileSize: 100, concurrentScans: 4,
   })
 
   const [notifSettings, setNotifSettings] = useState({
-    enableEmail: true,
-    enableSlack: false,
-    enableTeams: true,
-    digestFrequency: 'daily',
-    escalateAfterDays: 7,
-    ccManager: true,
-    ccDPO: true,
+    enableEmail: true, enableSlack: false, enableTeams: true,
+    digestFrequency: 'daily', escalateAfterDays: 7, ccManager: true, ccDPO: true,
   })
 
-  const addLocation = () => {
+  useEffect(() => {
+    Promise.all([
+      scanLocationsApi.getAll(),
+      settingsApi.getAll(),
+    ]).then(([locs, settings]) => {
+      setLocations(locs)
+      if (settings.email) setEmailSettings(settings.email)
+      if (settings.schedule) setScheduleSettings(settings.schedule)
+      if (settings.notifications) setNotifSettings(settings.notifications)
+    }).catch(console.error).finally(() => setLoading(false))
+  }, [])
+
+  const addLocation = async () => {
     if (!newLoc.name) return
-    setLocations([...locations, { id: Date.now(), name: newLoc.name, type: newLoc.type, status: 'active', lastScan: 'Henüz taranmadı' }])
-    setShowAddLocation(false)
-    setNewLoc({ name: '', type: 'SMB' })
+    try {
+      const created = await scanLocationsApi.create(newLoc)
+      setLocations([...locations, created])
+      setShowAddLocation(false)
+      setNewLoc({ name: '', type: 'SMB' })
+    } catch (err) {
+      console.error('Konum ekleme hatası:', err)
+    }
   }
 
-  const removeLocation = (id) => {
-    setLocations(locations.filter(l => l.id !== id))
+  const removeLocation = async (id) => {
+    try {
+      await scanLocationsApi.delete(id)
+      setLocations(locations.filter(l => l.id !== id))
+    } catch (err) {
+      console.error('Konum silme hatası:', err)
+    }
   }
 
-  const toggleLocationStatus = (id) => {
-    setLocations(locations.map(l => l.id === id ? { ...l, status: l.status === 'active' ? 'paused' : 'active' } : l))
+  const toggleLocationStatus = async (id) => {
+    const loc = locations.find(l => l.id === id)
+    try {
+      const updated = await scanLocationsApi.update(id, { status: loc.status === 'active' ? 'paused' : 'active' })
+      setLocations(locations.map(l => l.id === id ? updated : l))
+    } catch (err) {
+      console.error('Konum güncelleme hatası:', err)
+    }
+  }
+
+  const saveSettings = async (key, value) => {
+    setSaving(true)
+    try {
+      await settingsApi.set(key, value)
+    } catch (err) {
+      console.error('Ayar kaydetme hatası:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const tabs = [
@@ -56,6 +86,14 @@ export default function SettingsPage() {
     { id: 'schedule', label: 'Zamanlama', icon: Clock },
     { id: 'notifications', label: 'Bildirimler', icon: Bell },
   ]
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header"><h1>Ayarlar</h1><p>Yükleniyor...</p></div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -156,7 +194,9 @@ export default function SettingsPage() {
             <span style={{ fontSize: '0.85rem' }}>TLS Şifreleme Kullan</span>
           </div>
           <div style={{ marginTop: 20 }}>
-            <button className="btn btn-primary"><Save size={15} /> Kaydet</button>
+            <button className="btn btn-primary" disabled={saving} onClick={() => saveSettings('email', emailSettings)}>
+              <Save size={15} /> {saving ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
           </div>
         </div>
       )}
@@ -192,7 +232,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <div style={{ marginTop: 20 }}>
-            <button className="btn btn-primary"><Save size={15} /> Kaydet</button>
+            <button className="btn btn-primary" disabled={saving} onClick={() => saveSettings('schedule', scheduleSettings)}>
+              <Save size={15} /> {saving ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
           </div>
         </div>
       )}
@@ -232,7 +274,9 @@ export default function SettingsPage() {
             </div>
           </div>
           <div style={{ marginTop: 20 }}>
-            <button className="btn btn-primary"><Save size={15} /> Kaydet</button>
+            <button className="btn btn-primary" disabled={saving} onClick={() => saveSettings('notifications', notifSettings)}>
+              <Save size={15} /> {saving ? 'Kaydediliyor...' : 'Kaydet'}
+            </button>
           </div>
         </div>
       )}

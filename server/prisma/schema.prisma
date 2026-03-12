@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model DetectedFile {
+  id                Int      @id @default(autoincrement())
+  name              String
+  path              String
+  classification    String
+  size              String
+  owner             String
+  lastModified      String
+  detectedData      String   // JSON array stored as string
+  status            String   @default("pending")
+  notificationCount Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  exceptions Exception[]
+}
+
+model Rule {
+  id             Int      @id @default(autoincrement())
+  name           String
+  pattern        String
+  dataType       String
+  classification String
+  fileTypes      String   // JSON array stored as string
+  enabled        Boolean  @default(true)
+  description    String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Policy {
+  id             Int      @id @default(autoincrement())
+  name           String
+  classification String
+  status         String   @default("draft")
+  ownerDetection String   @default("lastEditor")
+  steps          String   // JSON array stored as string
+  triggeredCount Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Exception {
+  id          Int      @id @default(autoincrement())
+  fileId      Int
+  fileName    String
+  requestedBy String
+  department  String
+  reason      String
+  status      String   @default("pending")
+  approvedBy  String?
+  expiresAt   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  file DetectedFile @relation(fields: [fileId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  timestamp String
+  action    String
+  target    String
+  details   String
+  user      String
+  createdAt DateTime @default(now())
+}
+
+model ScanLocation {
+  id       Int    @id @default(autoincrement())
+  name     String
+  type     String
+  status   String @default("active")
+  lastScan String @default("Henüz taranmadı")
+}
+
+model Workflow {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String   @default("")
+  classification String   @default("")
+  nodes          String   // JSON stored as string
+  edges          String   // JSON stored as string
+  isTemplate     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String // JSON stored as string
+}

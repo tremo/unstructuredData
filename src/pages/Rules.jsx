@@ -1,23 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Shield, Plus, Edit2, Trash2, Search, Eye, ToggleLeft, ToggleRight } from 'lucide-react'
 import { dataClassifications, fileTypes } from '../data/mockData'
-
-const defaultRules = [
-  { id: 1, name: 'TCKN Tespiti', pattern: '\\b[1-9]\\d{10}\\b', dataType: 'TCKN', classification: 'critical', fileTypes: ['XLSX', 'DOCX', 'PDF', 'CSV', 'TXT'], enabled: true, description: 'TC Kimlik Numarası deseni' },
-  { id: 2, name: 'IBAN Tespiti', pattern: 'TR\\d{2}\\s?\\d{4}\\s?\\d{4}\\s?\\d{4}\\s?\\d{4}\\s?\\d{4}\\s?\\d{2}', dataType: 'IBAN', classification: 'critical', fileTypes: ['XLSX', 'DOCX', 'PDF', 'CSV'], enabled: true, description: 'Türk IBAN formatı' },
-  { id: 3, name: 'E-posta Adresi', pattern: '[\\w.-]+@[\\w.-]+\\.\\w{2,}', dataType: 'E-posta', classification: 'high', fileTypes: ['XLSX', 'DOCX', 'TXT', 'CSV', 'MSG'], enabled: true, description: 'E-posta adresi deseni' },
-  { id: 4, name: 'Telefon Numarası', pattern: '(\\+90|0)\\s?[5]\\d{2}\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}', dataType: 'Telefon', classification: 'high', fileTypes: ['XLSX', 'DOCX', 'PDF', 'CSV', 'TXT'], enabled: true, description: 'Türk cep telefonu formatı' },
-  { id: 5, name: 'Kredi Kartı', pattern: '\\b(?:\\d[ -]*?){13,16}\\b', dataType: 'Kredi Kartı', classification: 'critical', fileTypes: ['XLSX', 'CSV', 'TXT', 'PDF'], enabled: true, description: 'Kredi kartı numarası deseni' },
-  { id: 6, name: 'Sağlık Verisi Anahtar Kelime', pattern: '(tanı|teşhis|tedavi|ilaç|reçete|ameliyat|hasta)', dataType: 'Sağlık Verisi', classification: 'critical', fileTypes: ['DOCX', 'PDF', 'TXT', 'XLSX'], enabled: false, description: 'Sağlık ile ilgili anahtar kelimeler' },
-  { id: 7, name: 'Maaş/Ücret Bilgisi', pattern: '(maaş|ücret|bordro|brüt|net|AGİ)', dataType: 'Maaş Bilgisi', classification: 'critical', fileTypes: ['XLSX', 'PDF', 'DOCX'], enabled: true, description: 'Maaş ve ücret ile ilgili anahtar kelimeler' },
-]
+import { rulesApi } from '../services/api'
 
 export default function Rules() {
-  const [rules, setRules] = useState(defaultRules)
+  const [rules, setRules] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingRule, setEditingRule] = useState(null)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ name: '', pattern: '', dataType: '', classification: 'critical', fileTypes: [], enabled: true, description: '' })
+
+  useEffect(() => {
+    rulesApi.getAll().then(setRules).catch(console.error).finally(() => setLoading(false))
+  }, [])
 
   const filtered = rules.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -32,26 +28,43 @@ export default function Rules() {
 
   const openEdit = (rule) => {
     setEditingRule(rule)
-    setForm({ ...rule })
+    setForm({ name: rule.name, pattern: rule.pattern, dataType: rule.dataType, classification: rule.classification, fileTypes: [...rule.fileTypes], enabled: rule.enabled, description: rule.description })
     setShowModal(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name || !form.pattern) return
-    if (editingRule) {
-      setRules(rules.map(r => r.id === editingRule.id ? { ...form, id: r.id } : r))
-    } else {
-      setRules([...rules, { ...form, id: Date.now() }])
+    try {
+      if (editingRule) {
+        const updated = await rulesApi.update(editingRule.id, form)
+        setRules(rules.map(r => r.id === editingRule.id ? updated : r))
+      } else {
+        const created = await rulesApi.create(form)
+        setRules([...rules, created])
+      }
+      setShowModal(false)
+    } catch (err) {
+      console.error('Kural kaydetme hatası:', err)
     }
-    setShowModal(false)
   }
 
-  const toggleRule = (id) => {
-    setRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r))
+  const toggleRule = async (id) => {
+    const rule = rules.find(r => r.id === id)
+    try {
+      const updated = await rulesApi.update(id, { enabled: !rule.enabled })
+      setRules(rules.map(r => r.id === id ? updated : r))
+    } catch (err) {
+      console.error('Kural güncelleme hatası:', err)
+    }
   }
 
-  const deleteRule = (id) => {
-    setRules(rules.filter(r => r.id !== id))
+  const deleteRule = async (id) => {
+    try {
+      await rulesApi.delete(id)
+      setRules(rules.filter(r => r.id !== id))
+    } catch (err) {
+      console.error('Kural silme hatası:', err)
+    }
   }
 
   const toggleFileType = (ft) => {
@@ -95,7 +108,9 @@ export default function Rules() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(rule => (
+              {loading ? (
+                <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Yükleniyor...</td></tr>
+              ) : filtered.map(rule => (
                 <tr key={rule.id} style={{ opacity: rule.enabled ? 1 : 0.5 }}>
                   <td>
                     <button className="btn-icon" onClick={() => toggleRule(rule.id)} style={{ border: 'none', color: rule.enabled ? 'var(--accent-green)' : 'var(--text-muted)' }}>
