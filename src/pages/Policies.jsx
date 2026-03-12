@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ShieldAlert, Plus, Edit2, Trash2, Play, Pause, Eye, Clock, Mail, Lock, FolderLock, Bell, UserSearch } from 'lucide-react'
-import { policies as defaultPolicies, dataClassifications } from '../data/mockData'
+import { dataClassifications } from '../data/mockData'
+import { policiesApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 import ClassificationBadge from '../components/common/ClassificationBadge'
 
@@ -20,7 +21,8 @@ const ownerOptions = [
 ]
 
 export default function Policies() {
-  const [policiesList, setPolicies] = useState(defaultPolicies)
+  const [policiesList, setPolicies] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingPolicy, setEditingPolicy] = useState(null)
   const [viewPolicy, setViewPolicy] = useState(null)
@@ -28,6 +30,10 @@ export default function Policies() {
     name: '', classification: 'critical', status: 'draft', ownerDetection: 'lastEditor',
     steps: [{ type: 'notify', delay: 0, message: '' }]
   })
+
+  useEffect(() => {
+    policiesApi.getAll().then(setPolicies).catch(console.error).finally(() => setLoading(false))
+  }, [])
 
   const openNew = () => {
     setEditingPolicy(null)
@@ -41,14 +47,20 @@ export default function Policies() {
     setShowModal(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) return
-    if (editingPolicy) {
-      setPolicies(policiesList.map(p => p.id === editingPolicy.id ? { ...p, ...form } : p))
-    } else {
-      setPolicies([...policiesList, { ...form, id: Date.now(), createdAt: new Date().toISOString().split('T')[0], triggeredCount: 0 }])
+    try {
+      if (editingPolicy) {
+        const updated = await policiesApi.update(editingPolicy.id, form)
+        setPolicies(policiesList.map(p => p.id === editingPolicy.id ? updated : p))
+      } else {
+        const created = await policiesApi.create(form)
+        setPolicies([...policiesList, created])
+      }
+      setShowModal(false)
+    } catch (err) {
+      console.error('Politika kaydetme hatası:', err)
     }
-    setShowModal(false)
   }
 
   const addStep = () => {
@@ -66,8 +78,15 @@ export default function Policies() {
     setForm({ ...form, steps: form.steps.filter((_, i) => i !== idx) })
   }
 
-  const toggleStatus = (id) => {
-    setPolicies(policiesList.map(p => p.id === id ? { ...p, status: p.status === 'active' ? 'paused' : 'active' } : p))
+  const toggleStatus = async (id) => {
+    const policy = policiesList.find(p => p.id === id)
+    const newStatus = policy.status === 'active' ? 'paused' : 'active'
+    try {
+      const updated = await policiesApi.update(id, { status: newStatus })
+      setPolicies(policiesList.map(p => p.id === id ? updated : p))
+    } catch (err) {
+      console.error('Politika güncelleme hatası:', err)
+    }
   }
 
   const getStepIcon = (type) => {
@@ -92,48 +111,52 @@ export default function Policies() {
         <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> Yeni Politika</button>
       </div>
 
-      <div style={{ display: 'grid', gap: 16 }}>
-        {policiesList.map(policy => (
-          <div key={policy.id} className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{policy.name}</h3>
-                  <ClassificationBadge classification={policy.classification} />
-                  <StatusBadge status={policy.status} />
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Oluşturulma: {policy.createdAt} · Sahip tespiti: {ownerOptions.find(o => o.value === policy.ownerDetection)?.label} · {policy.triggeredCount} kez tetiklendi
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-sm btn-secondary" onClick={() => toggleStatus(policy.id)}>
-                  {policy.status === 'active' ? <><Pause size={13} /> Duraklat</> : <><Play size={13} /> Aktifleştir</>}
-                </button>
-                <button className="btn-icon" onClick={() => setViewPolicy(policy)}><Eye size={14} /></button>
-                <button className="btn-icon" onClick={() => openEdit(policy)}><Edit2 size={14} /></button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {policy.steps.map((step, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                    background: 'var(--bg-primary)', borderRadius: 8, fontSize: '0.8rem',
-                    border: '1px solid var(--border-color)'
-                  }}>
-                    {getStepIcon(step.type)}
-                    <span>{step.message || stepTypeOptions.find(s => s.value === step.type)?.label}</span>
-                    {step.delay > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>({step.delay} gün)</span>}
+      {loading ? (
+        <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Yükleniyor...</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          {policiesList.map(policy => (
+            <div key={policy.id} className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>{policy.name}</h3>
+                    <ClassificationBadge classification={policy.classification} />
+                    <StatusBadge status={policy.status} />
                   </div>
-                  {idx < policy.steps.length - 1 && <span style={{ color: 'var(--text-muted)' }}>→</span>}
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Oluşturulma: {policy.createdAt?.split('T')[0]} · Sahip tespiti: {ownerOptions.find(o => o.value === policy.ownerDetection)?.label} · {policy.triggeredCount} kez tetiklendi
+                  </div>
                 </div>
-              ))}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-sm btn-secondary" onClick={() => toggleStatus(policy.id)}>
+                    {policy.status === 'active' ? <><Pause size={13} /> Duraklat</> : <><Play size={13} /> Aktifleştir</>}
+                  </button>
+                  <button className="btn-icon" onClick={() => setViewPolicy(policy)}><Eye size={14} /></button>
+                  <button className="btn-icon" onClick={() => openEdit(policy)}><Edit2 size={14} /></button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {policy.steps.map((step, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                      background: 'var(--bg-primary)', borderRadius: 8, fontSize: '0.8rem',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      {getStepIcon(step.type)}
+                      <span>{step.message || stepTypeOptions.find(s => s.value === step.type)?.label}</span>
+                      {step.delay > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>({step.delay} gün)</span>}
+                    </div>
+                    {idx < policy.steps.length - 1 && <span style={{ color: 'var(--text-muted)' }}>→</span>}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>

@@ -1,16 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FileSearch, Filter, Download, Eye, Trash2, ShieldAlert, Search } from 'lucide-react'
-import { detectedFiles, dataClassifications } from '../data/mockData'
+import { filesApi } from '../services/api'
+import { dataClassifications } from '../data/mockData'
 import StatusBadge from '../components/common/StatusBadge'
 import ClassificationBadge from '../components/common/ClassificationBadge'
 
 export default function DetectedFiles() {
+  const [files, setFiles] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterClass, setFilterClass] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [selectedFile, setSelectedFile] = useState(null)
 
-  const filtered = detectedFiles.filter(f => {
+  useEffect(() => {
+    filesApi.getAll().then(setFiles).catch(console.error).finally(() => setLoading(false))
+  }, [])
+
+  const filtered = files.filter(f => {
     const matchSearch = f.name.toLowerCase().includes(search.toLowerCase()) ||
       f.path.toLowerCase().includes(search.toLowerCase()) ||
       f.owner.toLowerCase().includes(search.toLowerCase())
@@ -56,7 +63,7 @@ export default function DetectedFiles() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">{filtered.length} dosya bulundu</span>
+          <span className="card-title">{loading ? 'Yükleniyor...' : `${filtered.length} dosya bulundu`}</span>
         </div>
         <div className="table-container">
           <table>

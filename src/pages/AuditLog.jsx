@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ScrollText, Search, Download, Filter, FileSearch, Mail, Lock, ShieldCheck, Clock, Settings, AlertTriangle } from 'lucide-react'
-import { auditLogs } from '../data/mockData'
+import { auditApi } from '../services/api'
 
 const actionLabels = {
   scan_complete: { label: 'Tarama Tamamlandı', color: '#3b82f6', icon: FileSearch },
@@ -14,10 +14,16 @@ const actionLabels = {
 }
 
 export default function AuditLog() {
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterAction, setFilterAction] = useState('all')
 
-  const filtered = auditLogs.filter(log => {
+  useEffect(() => {
+    auditApi.getAll().then(setLogs).catch(console.error).finally(() => setLoading(false))
+  }, [])
+
+  const filtered = logs.filter(log => {
     const matchSearch = log.details.toLowerCase().includes(search.toLowerCase()) ||
       log.target.toLowerCase().includes(search.toLowerCase()) ||
       log.user.toLowerCase().includes(search.toLowerCase())
@@ -59,7 +65,9 @@ export default function AuditLog() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(log => {
+              {loading ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Yükleniyor...</td></tr>
+              ) : filtered.map(log => {
                 const actionInfo = actionLabels[log.action] || { label: log.action, color: '#94a3b8', icon: Clock }
                 const Icon = actionInfo.icon
                 return (

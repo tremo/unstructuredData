@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   ReactFlow,
   Controls,
@@ -16,7 +16,8 @@ import {
   Clock, Cog, CheckCircle, MailWarning, Lock, FolderLock,
   Bell, UserSearch, AlertTriangle, FileX
 } from 'lucide-react'
-import { workflowTemplates, nodeTypes as nodeTypeDefs } from '../data/mockData'
+import { workflowsApi } from '../services/api'
+import { nodeTypes as nodeTypeDefs } from '../data/mockData'
 import ClassificationBadge from '../components/common/ClassificationBadge'
 
 const iconMap = {
@@ -131,7 +132,24 @@ function TemplatePreview({ template, onClose }) {
 }
 
 export default function WorkflowTemplates() {
+  const [templates, setTemplates] = useState([])
+  const [loading, setLoading] = useState(true)
   const [previewTemplate, setPreviewTemplate] = useState(null)
+
+  useEffect(() => {
+    workflowsApi.getAll({ templates: 'true' })
+      .then(setTemplates)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header"><h1>Akış Şablonları</h1><p>Yükleniyor...</p></div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -141,7 +159,7 @@ export default function WorkflowTemplates() {
       </div>
 
       <div style={{ display: 'grid', gap: 20 }}>
-        {workflowTemplates.map(template => (
+        {templates.map(template => (
           <div key={template.id} className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
@@ -162,7 +180,6 @@ export default function WorkflowTemplates() {
               </div>
             </div>
 
-            {/* Mini flow preview */}
             <div style={{ height: 300, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
               <ReactFlow
                 nodes={template.nodes}

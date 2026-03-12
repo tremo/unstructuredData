@@ -1,19 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FileSearch, AlertTriangle, ShieldCheck, Lock, Clock,
   TrendingUp, FolderOpen, Mail, ArrowRight
 } from 'lucide-react'
-import { detectedFiles, scanLocations, auditLogs, policies } from '../data/mockData'
+import { filesApi, auditApi, policiesApi, scanLocationsApi } from '../services/api'
 import StatusBadge from '../components/common/StatusBadge'
 import ClassificationBadge from '../components/common/ClassificationBadge'
 
 export default function Dashboard() {
-  const criticalCount = detectedFiles.filter(f => f.classification === 'critical').length
-  const pendingCount = detectedFiles.filter(f => f.status === 'pending').length
-  const encryptedCount = detectedFiles.filter(f => f.status === 'encrypted').length
-  const resolvedCount = detectedFiles.filter(f => f.status === 'resolved').length
-  const activePolicies = policies.filter(p => p.status === 'active').length
-  const activeLocations = scanLocations.filter(l => l.status === 'active').length
+  const [stats, setStats] = useState({ total: 0, critical: 0, pending: 0, encrypted: 0, resolved: 0, activeLocations: 0 })
+  const [files, setFiles] = useState([])
+  const [logs, setLogs] = useState([])
+  const [policies, setPolicies] = useState([])
+  const [locations, setLocations] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      filesApi.getStats(),
+      filesApi.getAll(),
+      auditApi.getAll(),
+      policiesApi.getAll(),
+      scanLocationsApi.getAll(),
+    ]).then(([statsData, filesData, logsData, policiesData, locationsData]) => {
+      setStats(statsData)
+      setFiles(filesData)
+      setLogs(logsData)
+      setPolicies(policiesData)
+      setLocations(locationsData)
+    }).catch(err => console.error('Dashboard yükleme hatası:', err))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Gösterge Paneli</h1>
+          <p>Yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const totalLocations = locations.length
 
   return (
     <div>
@@ -26,42 +56,42 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="stat-icon red"><AlertTriangle size={22} /></div>
           <div className="stat-info">
-            <h3>{criticalCount}</h3>
+            <h3>{stats.critical}</h3>
             <p>Kritik Bulgu</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon yellow"><Clock size={22} /></div>
           <div className="stat-info">
-            <h3>{pendingCount}</h3>
+            <h3>{stats.pending}</h3>
             <p>Bekleyen İşlem</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon orange"><Lock size={22} /></div>
           <div className="stat-info">
-            <h3>{encryptedCount}</h3>
+            <h3>{stats.encrypted}</h3>
             <p>Şifrelenen Dosya</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon green"><ShieldCheck size={22} /></div>
           <div className="stat-info">
-            <h3>{resolvedCount}</h3>
+            <h3>{stats.resolved}</h3>
             <p>Çözülen Dosya</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon blue"><FileSearch size={22} /></div>
           <div className="stat-info">
-            <h3>{detectedFiles.length}</h3>
+            <h3>{stats.total}</h3>
             <p>Toplam Tespit</p>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon purple"><FolderOpen size={22} /></div>
           <div className="stat-info">
-            <h3>{activeLocations}/{scanLocations.length}</h3>
+            <h3>{stats.activeLocations}/{totalLocations}</h3>
             <p>Aktif Tarama Noktası</p>
           </div>
         </div>
@@ -86,7 +116,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {detectedFiles.slice(0, 5).map(file => (
+                {files.slice(0, 5).map(file => (
                   <tr key={file.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{file.name}</div>
@@ -110,7 +140,7 @@ export default function Dashboard() {
             </a>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {auditLogs.slice(0, 6).map(log => (
+            {logs.slice(0, 6).map(log => (
               <div key={log.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: 8, flexShrink: 0,
@@ -160,7 +190,7 @@ export default function Dashboard() {
           <div className="card-header">
             <span className="card-title">Tarama Noktaları</span>
           </div>
-          {scanLocations.map(loc => (
+          {locations.map(loc => (
             <div key={loc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
               <div>
                 <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{loc.name}</div>
